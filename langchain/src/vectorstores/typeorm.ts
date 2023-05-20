@@ -37,6 +37,8 @@ export class TypeORMVectorStore extends VectorStore {
 
   appDataSource: DataSourceT;
 
+  _verbose?: boolean;
+
   private constructor(embeddings: Embeddings, fields: TypeORMVectorStoreArgs) {
     super(embeddings, fields);
     this.tableName = fields.tableName || defaultDocumentTableName;
@@ -87,6 +89,12 @@ export class TypeORMVectorStore extends VectorStore {
     if (!postgresqlVectorStore.appDataSource.isInitialized) {
       await postgresqlVectorStore.appDataSource.initialize();
     }
+
+    postgresqlVectorStore._verbose =
+      typeof process !== "undefined"
+        ? // eslint-disable-next-line no-process-env
+          process.env?.LANGCHAIN_VERBOSE !== undefined
+        : false;
 
     return postgresqlVectorStore;
   }
@@ -148,7 +156,9 @@ export class TypeORMVectorStore extends VectorStore {
         .filter((d) => !idsDocumentsThatWillBeUpserted.includes(d.id))
         .map((d) => d.id);
 
-      // console.log('idsDocumentsThatWeShouldDeleted', idsDocumentsThatWeShouldDeleted)
+      this.verboseConsoleLog(
+        `Ids has changed for document ${doc.sourceName} and ${doc.sourceType}, action: delete this ids: ${idsDocumentsThatWeShouldDeleted}`
+      );
 
       await documentRepository.delete({
         id: {
@@ -168,14 +178,20 @@ export class TypeORMVectorStore extends VectorStore {
 
       if (documentsInDatabase) {
         if (documentsInDatabase.hash === row.hash) {
-          console.log(row.id, "same hash ignore");
+          this.verboseConsoleLog(
+            `Same hash was found for id ${row.id}, action: ignore`
+          );
         } else {
           documentsToUpsert.push(row);
-          console.log(row.id, "need to update");
+          this.verboseConsoleLog(
+            `Different hash was found for id ${row.id}, action: update embedding`
+          );
         }
       } else {
         documentsToUpsert.push(row);
-        console.log(row.id, "need to create");
+        this.verboseConsoleLog(
+          `No document was found for id ${row.id}, action: create`
+        );
       }
     }
 
@@ -186,7 +202,7 @@ export class TypeORMVectorStore extends VectorStore {
       try {
         await documentRepository.upsert(chunk, [`id`]);
       } catch (e) {
-        console.log(e);
+        console.error(e);
         throw new Error(`Error inserting: ${chunk[0].pageContent}`);
       }
     }
@@ -281,5 +297,11 @@ export class TypeORMVectorStore extends VectorStore {
       dbConfig
     );
     return instance;
+  }
+
+  private verboseConsoleLog(message: string): void {
+    if (this._verbose) {
+      console.log(message);
+    }
   }
 }

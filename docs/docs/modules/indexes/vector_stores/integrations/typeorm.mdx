@@ -1,0 +1,73 @@
+# TypeORM
+
+For augmenting existing models in PostgreSQL database with vector search, Langchain supports using [TypeORM](https://typeorm.io/) together with PostgreSQL and [`pgvector`](https://github.com/pgvector/pgvector) Postgres extension.
+
+## Setup
+
+### Install PG
+
+To work with TypeORM, you need to install `pg` package:
+
+```bash npm2yarn
+npm install pg
+```
+
+### Setup `pgvector` self hosted instance with `docker-compose`
+
+`pgvector` provides a prebuilt Docker image that can be used to quickly setup a self-hosted Postgres instance.
+
+```yaml
+services:
+  db:
+    image: ankane/pgvector
+    ports:
+      - 5432:5432
+    volumes:
+      - db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=
+      - POSTGRES_USER=
+      - POSTGRES_DB=
+
+volumes:
+  db:
+```
+
+### Instantiate the store and create the table that will store the vectors
+
+```typescript
+import { DataSourceOptions } from "typeorm";
+import { TypeORMVectorStore } from "langchain/vectorstores/typeorm";
+import { OpenAIEmbeddings } from "langchain/embeddings/openai";
+
+const args = {
+  postgresConnectionOptions: {
+    type: "postgres",
+    host: "localhost",
+    port: 5432,
+    username: "myuser",
+    password: "!ChangeMe!",
+    database: "api",
+  } as DataSourceOptions,
+};
+
+const typeormVectorStore = await TypeORMVectorStore.fromDataSource(
+  new OpenAIEmbeddings(),
+  args
+);
+```
+
+To create the table and enable the extension, run once the following command:
+
+```typescript
+await typeormVectorStore.initTable();
+```
+
+## Usage
+
+import CodeBlock from "@theme/CodeBlock";
+import Example from "@examples/indexes/vector_stores/typeorm";
+
+Use the `withModel` method to get proper type hints for `metadata` field:
+
+<CodeBlock language="typescript">{Example}</CodeBlock>
