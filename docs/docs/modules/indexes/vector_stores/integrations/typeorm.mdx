@@ -1,18 +1,20 @@
 # TypeORM
 
-For augmenting existing models in PostgreSQL database with vector search, Langchain supports using [TypeORM](https://typeorm.io/) together with PostgreSQL and [`pgvector`](https://github.com/pgvector/pgvector) Postgres extension.
+For augmenting existing models in a PostgreSQL database with vector search, Langchain supports using [TypeORM](https://typeorm.io/) together with PostgreSQL and the [`pgvector`](https://github.com/pgvector/pgvector) Postgres extension.
 
 ## Setup
 
-### Install PG
+To work with TypeORM, you need to install the `typeorm` and `pg` packages:
 
-To work with TypeORM, you need to install `pg` package:
+```bash npm2yarn
+npm install typeorm
+```
 
 ```bash npm2yarn
 npm install pg
 ```
 
-### Setup `pgvector` self hosted instance with `docker-compose`
+### Setup a `pgvector` self hosted instance with `docker-compose`
 
 `pgvector` provides a prebuilt Docker image that can be used to quickly setup a self-hosted Postgres instance.
 
@@ -35,7 +37,7 @@ volumes:
 
 You can find more information on how to setup `pgvector` in the [official repository](https://github.com/pgvector/pgvector).
 
-### Instantiate the store and create the table that will store the vectors
+### Instantiating the store
 
 ```typescript
 import { DataSourceOptions } from "typeorm";
