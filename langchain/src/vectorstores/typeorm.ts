@@ -1,9 +1,6 @@
 import { Metadata } from "@opensearch-project/opensearch/api/types.js";
-import {
-  DataSource as DataSourceT,
-  DataSourceOptions,
-  EntitySchema,
-} from "typeorm";
+import { DataSource, DataSourceOptions, EntitySchema } from "typeorm";
+import type { createHash as CreateHashT } from "node:crypto";
 import { VectorStore } from "./base.js";
 import { Embeddings } from "../embeddings/base.js";
 import { Document } from "../document.js";
@@ -13,11 +10,13 @@ import {
   getSourceTypeFromDocument,
   getUniqueIDFromDocument,
 } from "../util/document_utils.js";
+import { getEnv } from "../util/env.js";
 
 export interface TypeORMVectorStoreArgs {
   postgresConnectionOptions: DataSourceOptions;
   tableName?: string;
   filter?: Metadata;
+  verbose?: boolean;
 }
 
 export class TypeORMVectorStoreDocument extends Document {
@@ -35,7 +34,7 @@ export class TypeORMVectorStore extends VectorStore {
 
   filter?: Metadata;
 
-  appDataSource: DataSourceT;
+  appDataSource: DataSource;
 
   _verbose?: boolean;
 
@@ -77,7 +76,7 @@ export class TypeORMVectorStore extends VectorStore {
       },
     });
 
-    const appDataSource = new DataSourceT({
+    const appDataSource = new DataSource({
       entities: [TypeORMDocumentEntity],
       ...fields.postgresConnectionOptions,
     });
@@ -94,13 +93,16 @@ export class TypeORMVectorStore extends VectorStore {
       typeof process !== "undefined"
         ? // eslint-disable-next-line no-process-env
           process.env?.LANGCHAIN_VERBOSE !== undefined
-        : false;
+        : fields?.verbose ?? false;
 
     return postgresqlVectorStore;
   }
 
   async addDocuments(documents: Document[]): Promise<void> {
     const texts = documents.map(({ pageContent }) => pageContent);
+    // This will create the table if it does not exist. We can call it every time as it doesn't
+    // do anything if the table already exists, and it is not expensive in terms of performance
+    await this.initTable();
     return this.addVectors(
       await this.embeddings.embedDocuments(texts),
       documents
@@ -108,7 +110,7 @@ export class TypeORMVectorStore extends VectorStore {
   }
 
   async addVectors(vectors: number[][], documents: Document[]): Promise<void> {
-    const { createHash } = await import("node:crypto");
+    const { createHash } = await TypeORMVectorStore.imports();
     const rows = vectors.map((embedding, idx) => {
       const embeddingString = `[${embedding.join(",")}]`;
       const hash = createHash("sha1");
@@ -122,7 +124,7 @@ export class TypeORMVectorStore extends VectorStore {
         hash:
           documents[idx].hash ??
           hash.update(documents[idx].pageContent).digest("hex"),
-      } as TypeORMVectorStoreDocument;
+      } satisfies TypeORMVectorStoreDocument;
 
       return documentRow;
     });
@@ -297,6 +299,19 @@ export class TypeORMVectorStore extends VectorStore {
       dbConfig
     );
     return instance;
+  }
+
+  static async imports(): Promise<{ createHash: typeof CreateHashT }> {
+    try {
+      const { createHash } = await import("node:crypto");
+
+      return { createHash };
+    } catch (err) {
+      console.error(err);
+      throw new Error(
+        `Failed to load node:crypto. TypeORMVectorStore available only on environment 'node'. It appears you are running environment '${getEnv()}'. See https://<link to docs> for alternatives.`
+      );
+    }
   }
 
   private verboseConsoleLog(message: string): void {
